@@ -13,6 +13,9 @@
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- Runtime permission on Android 13+ (standard dialog). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <application
         android:name=".UsageTrackerApplication"
         android:allowBackup="true"

@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import com.example.usagetracker.notifications.Notifications
 import com.example.usagetracker.permissions.PermissionChecker
 import com.example.usagetracker.tracking.TrackerPrefs
 import com.example.usagetracker.tracking.TrackerScheduler
@@ -98,6 +99,13 @@ fun SettingsScreen(onOpenCategories: () -> Unit) {
                     "Usage data older than 3 months is automatically deleted.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+            }
+        }
+        // TEMPORARY: remove once Phase 10b's real notifications are working.
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Debug", style = MaterialTheme.typography.titleMedium)
+                Button(onClick = { Notifications.showTest(context) }) { Text("Send test notification") }
             }
         }
         Text("Permissions", style = MaterialTheme.typography.headlineMedium)
