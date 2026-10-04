@@ -17,6 +17,9 @@ interface FocusTaskDao {
     @Query("SELECT * FROM focus_tasks WHERE date = :date ORDER BY createdAt")
     suspend fun getForDate(date: String): List<FocusTask>
 
+    @Query("SELECT * FROM focus_tasks WHERE date = :date AND isCompleted = 0 ORDER BY createdAt, id")
+    suspend fun getIncompleteForDate(date: String): List<FocusTask>
+
     @Query("SELECT * FROM focus_tasks WHERE date = :date ORDER BY createdAt, id")
     fun observeForDate(date: String): Flow<List<FocusTask>>
 

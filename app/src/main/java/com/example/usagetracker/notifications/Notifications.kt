@@ -14,7 +14,7 @@ import com.example.usagetracker.R
 object Notifications {
     const val CHANNEL_FOCUS_TASKS = "focus_tasks"
 
-    private const val TEST_NOTIFICATION_ID = 1
+    private const val INCOMPLETE_TASKS_NOTIFICATION_ID = 1
 
     /** Idempotent; safe to call on every launch. */
     fun createChannels(context: Context) {
@@ -32,14 +32,19 @@ object Notifications {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
 
-    /** Temporary debug helper; remove once Phase 10b's real notifications work. */
-    fun showTest(context: Context) {
-        if (!hasPermission(context)) return
+    /** Posts (or replaces) the single incomplete-tasks reminder. No-op without notification permission. */
+    fun showIncompleteTasks(context: Context, titles: List<String>) {
+        if (titles.isEmpty() || !hasPermission(context)) return
+        val title = if (titles.size == 1) "1 task still incomplete" else "${titles.size} tasks still incomplete"
+        val body = titles.joinToString("\n")
         val notification = NotificationCompat.Builder(context, CHANNEL_FOCUS_TASKS)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Test")
-            .setContentText("Notifications are working")
+            .setContentTitle(title)
+            .setContentText(titles.joinToString(", "))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
             .build()
-        NotificationManagerCompat.from(context).notify(TEST_NOTIFICATION_ID, notification)
+        NotificationManagerCompat.from(context).notify(INCOMPLETE_TASKS_NOTIFICATION_ID, notification)
     }
 }
