@@ -25,4 +25,11 @@ interface FocusTaskDao {
 
     @Query("DELETE FROM focus_tasks WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    /** How many copies of [title] already carried over from [from] onto [date]; guards against double carry-over. */
+    @Query("SELECT COUNT(*) FROM focus_tasks WHERE date = :date AND title = :title AND carriedOverFromDate = :from")
+    suspend fun countCarriedOver(date: String, title: String, from: String): Int
+
+    @Query("DELETE FROM focus_tasks")
+    suspend fun deleteAll()
 }

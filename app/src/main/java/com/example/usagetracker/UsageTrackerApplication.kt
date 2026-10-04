@@ -1,6 +1,7 @@
 package com.example.usagetracker
 
 import android.app.Application
+import com.example.usagetracker.endofday.EndOfDayScheduler
 import com.example.usagetracker.notifications.Notifications
 import com.example.usagetracker.notifications.TaskReminderScheduler
 import com.example.usagetracker.retention.RetentionScheduler
@@ -11,5 +12,6 @@ class UsageTrackerApplication : Application() {
         Notifications.createChannels(this)
         RetentionScheduler.schedule(this)
         TaskReminderScheduler.schedule(this)
+        EndOfDayScheduler.schedule(this)
     }
 }

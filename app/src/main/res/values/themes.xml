@@ -1,3 +1,10 @@
 <resources>
     <style name="Theme.UsageTracker" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!-- Splash: solid launcher-icon blue plus the icon, then hands over to Theme.UsageTracker. -->
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/ic_launcher_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.UsageTracker</item>
+    </style>
 </resources>

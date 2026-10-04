@@ -1,0 +1,4 @@
+<resources>
+    <!-- Dark window background/dialogs for system dark mode; Compose handles the rest. -->
+    <style name="Theme.UsageTracker" parent="android:Theme.Material.NoActionBar" />
+</resources>

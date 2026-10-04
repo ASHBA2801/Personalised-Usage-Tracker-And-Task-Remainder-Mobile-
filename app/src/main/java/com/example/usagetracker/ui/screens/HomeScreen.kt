@@ -1,6 +1,13 @@
 package com.example.usagetracker.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
@@ -58,7 +64,11 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = viewModel(
         item { PeriodToggle(state.period, viewModel::selectPeriod) }
 
         when {
-            report == null -> Unit
+            report == null -> item {
+                Box(Modifier.fillMaxWidth().padding(top = 96.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
+            }
             report.isEmpty -> item {
                 EmptyState(state.period, trackingEnabled, everTracked, onOpenSettings)
             }
@@ -154,19 +164,19 @@ private fun TrackingOffBanner(onOpenSettings: () -> Unit) {
 
 @Composable
 private fun EmptyState(period: Period, trackingEnabled: Boolean, everTracked: Boolean, onOpenSettings: () -> Unit) {
-    val (title, body, showSettings) = when {
+    val (title, body, linksToSettings) = when {
         !trackingEnabled -> Triple(
-            "Tracking is off",
-            "Turn on \"Track app usage\" in Settings to start recording.",
+            "No usage tracked yet",
+            "Turn on tracking in Settings to start seeing your report here",
             true,
         )
         !everTracked -> Triple(
-            "No usage recorded yet",
+            "No usage tracked yet",
             "Tracking is on. The first check runs within about 15 minutes.",
             false,
         )
         else -> Triple(
-            "No usage recorded ${if (period == Period.TODAY) "today" else "this week"}",
+            "No usage tracked ${if (period == Period.TODAY) "today" else "this week"}",
             "Usage shows up here after the next background check.",
             false,
         )
@@ -176,9 +186,20 @@ private fun EmptyState(period: Period, trackingEnabled: Boolean, everTracked: Bo
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        Icon(
+            Icons.Filled.DateRange,
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.outline,
+        )
         Text(title, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
-        Text(body, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
-        if (showSettings) Button(onClick = onOpenSettings) { Text("Open Settings") }
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+            color = if (linksToSettings) MaterialTheme.colorScheme.primary else Color.Unspecified,
+            modifier = if (linksToSettings) Modifier.clickable(onClick = onOpenSettings).padding(8.dp) else Modifier,
+        )
     }
 }
 

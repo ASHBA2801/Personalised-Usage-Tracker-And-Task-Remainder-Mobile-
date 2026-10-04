@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">UsageTracker</string>
-    <string name="content_detection_service_label">UsageTracker Content Detection</string>
-    <string name="content_detection_service_description">Lets UsageTracker detect what kind of content is playing in YouTube so it can categorize your usage. Outside YouTube it only notices which app is in front; screen content is read only inside YouTube.</string>
+    <string name="app_name">Focus Tracker</string>
+    <string name="content_detection_service_label">Focus Tracker Content Detection</string>
+    <string name="content_detection_service_description">Lets Focus Tracker detect what kind of content is playing in YouTube so it can categorize your usage. Outside YouTube it only notices which app is in front; screen content is read only inside YouTube.</string>
 </resources>

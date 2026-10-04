@@ -43,6 +43,9 @@ interface UsageSessionDao {
 
     @Query("DELETE FROM usage_sessions WHERE endTime < :timestamp")
     suspend fun deleteOlderThan(timestamp: Long): Int
+
+    @Query("DELETE FROM usage_sessions")
+    suspend fun deleteAll()
 }
 
 data class TrackedApp(val packageName: String, val appName: String, val lastStart: Long)

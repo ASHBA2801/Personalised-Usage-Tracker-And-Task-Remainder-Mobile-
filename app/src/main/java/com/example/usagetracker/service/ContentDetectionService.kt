@@ -14,6 +14,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.example.usagetracker.data.AppDatabase
 import com.example.usagetracker.data.CategoryRepository
 import com.example.usagetracker.data.UsageSession
+import com.example.usagetracker.tracking.TrackerPrefs
 import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,7 @@ class ContentDetectionService : AccessibilityService() {
     private val dao by lazy { AppDatabase.getInstance(applicationContext).usageSessionDao() }
     private val categories by lazy { CategoryRepository(applicationContext) }
     private var openRowId: Long? = null // only touched on the executor thread
+    private val trackerPrefs by lazy { TrackerPrefs(applicationContext) }
 
     private val screenOff = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -55,6 +57,7 @@ class ContentDetectionService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
+        if (!trackingOn()) return
         val inYouTube = event.packageName == YOUTUBE
         if (inYouTube) {
             if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
@@ -77,7 +80,20 @@ class ContentDetectionService : AccessibilityService() {
         }, delayMs)
     }
 
+    /**
+     * The master "Tracking" switch. While it is off nothing is processed or written; a row that was
+     * open when it went off is closed once so it doesn't keep counting.
+     */
+    private fun trackingOn(): Boolean {
+        if (trackerPrefs.enabled) return true
+        handler.removeCallbacksAndMessages(null)
+        scanScheduled = false
+        debouncer.forceLeave(System.currentTimeMillis())?.let(::persist)
+        return false
+    }
+
     private fun scan() {
+        if (!trackingOn()) return
         val now = System.currentTimeMillis()
         val root = rootInActiveWindow
         if (root == null) {
