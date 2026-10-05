@@ -72,7 +72,15 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
             modifier = Modifier.padding(innerPadding),
         ) {
             composable(Destination.Home.route) { HomeScreen(onOpenSettings = { navigateToTab(Destination.Settings) }) }
-            composable(Destination.FocusTasks.route) { FocusTasksScreen() }
+            composable(Destination.FocusTasks.route) {
+                FocusTasksScreen(
+                    onImport = {},
+                    onOpenTemplates = {},
+                    importResult = null,
+                    onImportResultShown = {},
+                    onUndoImport = {},
+                )
+            }
             composable(Destination.Settings.route) {
                 SettingsScreen(
                     onOpenCategories = { navController.navigate(CATEGORIES_ROUTE) },
