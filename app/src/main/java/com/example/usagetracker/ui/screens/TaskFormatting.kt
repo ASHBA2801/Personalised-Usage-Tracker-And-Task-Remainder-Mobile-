@@ -40,14 +40,17 @@ object TaskFormatting {
         else -> null
     }
 
-    /** "Due 20:00" when on [onDate], else "Due 7 Oct 20:00"; a date-only (23:59) deadline drops the time. */
+    /**
+     * "Due 20:00" when on [onDate], else "Due 7 Oct 20:00". A date-only (23:59) deadline drops the time,
+     * so one on [onDate] reads "Due end of day".
+     */
     fun deadline(millis: Long, onDate: LocalDate?, zone: ZoneId = ZoneId.systemDefault()): String {
         val at = Instant.ofEpochMilli(millis).atZone(zone)
         val date = at.toLocalDate()
         val time = at.toLocalTime().withSecond(0).withNano(0)
         val day = if (date == onDate) null else SHORT_DAY.format(date)
         val clock = if (time == END_OF_DAY) null else TIME.format(time)
-        return "Due " + listOfNotNull(day, clock).joinToString(" ").ifEmpty { "today" }
+        return "Due " + listOfNotNull(day, clock).joinToString(" ").ifEmpty { "end of day" }
     }
 
     fun estimate(minutes: Int): String =

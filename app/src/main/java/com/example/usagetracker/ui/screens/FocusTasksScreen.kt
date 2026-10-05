@@ -108,10 +108,16 @@ fun FocusTasksScreen(
         }
     }
 
+    // Take the result into local state and consume it, so a rotation never shows (or undoes) it twice.
+    // Showing happens in a separate effect: consuming changes importResult, which cancels this one.
+    var announce by remember { mutableStateOf<ImportResult?>(null) }
     LaunchedEffect(importResult) {
         val result = importResult ?: return@LaunchedEffect
-        // Consume first, so a recomposition or rotation never shows (or undoes) it twice.
+        announce = result
         onImportResultShown()
+    }
+    LaunchedEffect(announce) {
+        val result = announce ?: return@LaunchedEffect
         val n = result.insertedCount
         val outcome = snackbar.showSnackbar(
             message = "Imported $n task${if (n == 1) "" else "s"}",
@@ -119,6 +125,7 @@ fun FocusTasksScreen(
             duration = SnackbarDuration.Long, // about 10 seconds
         )
         if (outcome == SnackbarResult.ActionPerformed) onUndoImport(result.batchId)
+        announce = null
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
