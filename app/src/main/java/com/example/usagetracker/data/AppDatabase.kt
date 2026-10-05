@@ -7,11 +7,15 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [UsageSession::class, FocusTask::class, CategoryRule::class], version = 3)
+@Database(
+    entities = [UsageSession::class, FocusTask::class, CategoryRule::class, SubTask::class],
+    version = 4,
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun usageSessionDao(): UsageSessionDao
     abstract fun focusTaskDao(): FocusTaskDao
     abstract fun categoryRuleDao(): CategoryRuleDao
+    abstract fun subTaskDao(): SubTaskDao
 
     companion object {
         /** v1 -> v2: adds category_rules. Existing usage rows are recategorized when defaults seed. */
@@ -40,6 +44,31 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * v3 -> v4: task details for bulk import (deadline, priority, notes, tags, estimate, import batch)
+         * and the sub_tasks checklist table. Existing tasks keep their data and get the column defaults.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `focus_tasks` ADD COLUMN `deadline` INTEGER")
+                db.execSQL("ALTER TABLE `focus_tasks` ADD COLUMN `priority` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `focus_tasks` ADD COLUMN `notes` TEXT")
+                db.execSQL("ALTER TABLE `focus_tasks` ADD COLUMN `tags` TEXT")
+                db.execSQL("ALTER TABLE `focus_tasks` ADD COLUMN `estimatedMinutes` INTEGER")
+                db.execSQL("ALTER TABLE `focus_tasks` ADD COLUMN `importBatchId` TEXT")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_focus_tasks_importBatchId` ON `focus_tasks` (`importBatchId`)")
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `sub_tasks` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`taskId` INTEGER NOT NULL, `title` TEXT NOT NULL, `isCompleted` INTEGER NOT NULL, " +
+                        "`deadline` INTEGER, `sortOrder` INTEGER NOT NULL, " +
+                        "FOREIGN KEY(`taskId`) REFERENCES `focus_tasks`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_sub_tasks_taskId` ON `sub_tasks` (`taskId`)")
+            }
+        }
+
+        val ALL_MIGRATIONS = arrayOf(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+
         @Volatile private var instance: AppDatabase? = null
 
         fun getInstance(context: Context): AppDatabase =
@@ -48,7 +77,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "usage_tracker.db",
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build().also { instance = it }
+                ).addMigrations(*ALL_MIGRATIONS).build().also { instance = it }
             }
     }
 }

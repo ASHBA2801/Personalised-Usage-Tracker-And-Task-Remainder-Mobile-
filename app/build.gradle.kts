@@ -57,6 +57,17 @@ android {
     buildFeatures {
         compose = true
     }
+
+    // Robolectric needs merged resources/assets; MigrationTestHelper reads the exported schemas.
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    // Local unit tests only see the debug variant's merged assets, so the schemas go there (never in release).
+    sourceSets {
+        getByName("debug").assets.directories.add("$projectDir/schemas")
+        getByName("androidTest").assets.directories.add("$projectDir/schemas")
+    }
 }
 
 dependencies {
@@ -81,9 +92,15 @@ dependencies {
     implementation(libs.androidx.work.runtime)
 
     testImplementation(libs.junit)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core)
+    testImplementation(libs.androidx.test.ext.junit)
+    testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.room.testing)
 }
