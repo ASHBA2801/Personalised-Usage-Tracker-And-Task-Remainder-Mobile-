@@ -18,6 +18,9 @@ class UsagePollWorker(context: Context, params: WorkerParameters) : CoroutineWor
         return try {
             val inserted = UsagePoller(applicationContext).poll()
             Log.d(TAG, "Poll finished, $inserted new session(s)")
+            if (inputData.getBoolean(TrackerScheduler.KEY_CHAIN, false)) {
+                TrackerScheduler.scheduleNextFromWorker(applicationContext)
+            }
             Result.success()
         } catch (e: SecurityException) {
             TrackerScheduler.disable(applicationContext)

@@ -5,6 +5,11 @@ import android.content.Intent
 import android.provider.Settings
 import android.text.format.DateFormat
 import android.widget.Toast
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import com.example.usagetracker.service.DiagFileWriter
+import com.example.usagetracker.service.DiagFormatter
+import com.example.usagetracker.service.DiagPrefs
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
@@ -44,13 +49,17 @@ import com.example.usagetracker.tracking.TrackerPrefs
 import com.example.usagetracker.tracking.TrackerScheduler
 
 @Composable
-fun SettingsScreen(onOpenCategories: () -> Unit, onOpenPrivacy: () -> Unit) {
+fun SettingsScreen(onOpenCategories: () -> Unit, onOpenPrivacy: () -> Unit, onOpenDetectionStatus: () -> Unit) {
     val context = LocalContext.current
     var usageGranted by remember { mutableStateOf(PermissionChecker.hasUsageAccess(context)) }
     var detectionGranted by remember { mutableStateOf(PermissionChecker.isContentDetectionEnabled(context)) }
 
     var trackingEnabled by remember { mutableStateOf(TrackerPrefs(context).enabled) }
     var confirmDelete by remember { mutableStateOf(false) }
+    val diagPrefs = remember { DiagPrefs(context) }
+    var diagUnlocked by remember { mutableStateOf(diagPrefs.unlocked) }
+    var diagEnabled by remember { mutableStateOf(diagPrefs.enabled) }
+    var headingTaps by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     var endOfDayHour by remember { mutableStateOf(EndOfDayPrefs(context).endOfDayHour) }
     var endOfDayMinute by remember { mutableStateOf(EndOfDayPrefs(context).endOfDayMinute) }
@@ -70,7 +79,21 @@ fun SettingsScreen(onOpenCategories: () -> Unit, onOpenPrivacy: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Text("Tracking", style = MaterialTheme.typography.headlineMedium)
+        // Hidden: tap the heading 5 times to reveal the diagnostics section.
+        Text(
+            "Tracking",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+            ) {
+                if (!diagUnlocked && ++headingTaps >= 5) {
+                    diagPrefs.unlocked = true
+                    diagUnlocked = true
+                    Toast.makeText(context, "Diagnostics unlocked", Toast.LENGTH_SHORT).show()
+                }
+            },
+        )
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
@@ -175,6 +198,47 @@ fun SettingsScreen(onOpenCategories: () -> Unit, onOpenPrivacy: () -> Unit) {
                     onClick = { confirmDelete = true },
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 ) { Text("Delete all data") }
+            }
+        }
+        if (diagUnlocked) {
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("Shorts diagnostics", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                "While on and YouTube is open, each scan writes the screen structure (no text) " +
+                                    "to a small local file and to Logcat tag ShortsDiag. Turn off when done.",
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
+                        }
+                        Switch(
+                            checked = diagEnabled,
+                            onCheckedChange = { diagPrefs.enabled = it; diagEnabled = it },
+                        )
+                    }
+                    Text("Add a marker to the file (then switch to YouTube):", style = MaterialTheme.typography.bodyMedium)
+                    listOf(
+                        "capture1-shorts-tab" to "1: Shorts tab",
+                        "capture2-long-video" to "2: Long video",
+                        "capture3-home-feed" to "3: Home feed",
+                        "capture4-shorts-from-search-or-channel" to "4: Shorts via search/channel",
+                    ).forEach { (name, label) ->
+                        OutlinedButton(onClick = {
+                            DiagFileWriter.get(context).append(DiagFormatter.marker(System.currentTimeMillis(), name))
+                            Toast.makeText(context, "Marker: $name", Toast.LENGTH_SHORT).show()
+                        }) { Text(label) }
+                    }
+                    Button(onClick = onOpenDetectionStatus) { Text("Detection status") }
+                    TextButton(onClick = {
+                        DiagFileWriter.get(context).clear()
+                        Toast.makeText(context, "Diagnostics file cleared", Toast.LENGTH_SHORT).show()
+                    }) { Text("Clear diagnostics file") }
+                }
             }
         }
         Text("Permissions", style = MaterialTheme.typography.headlineMedium)

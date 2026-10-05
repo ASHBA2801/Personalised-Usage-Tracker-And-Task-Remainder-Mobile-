@@ -8,6 +8,8 @@ import com.example.usagetracker.data.AppDatabase
 import com.example.usagetracker.data.CategoryRepository
 import com.example.usagetracker.data.MIN_SESSION_MILLIS
 import com.example.usagetracker.data.UsageSession
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class UsagePoller(context: Context) {
     private val appContext = context.applicationContext
@@ -16,7 +18,9 @@ class UsagePoller(context: Context) {
     private val dao = AppDatabase.getInstance(appContext).usageSessionDao()
 
     /** Reads events since the last poll and stores finished sessions. Returns the number inserted. */
-    suspend fun poll(now: Long = System.currentTimeMillis()): Int {
+    suspend fun poll(now: Long = System.currentTimeMillis()): Int = pollLock.withLock { pollLocked(now) }
+
+    private suspend fun pollLocked(now: Long): Int {
         val since = prefs.lastPolledTimestamp ?: (now - DEFAULT_LOOKBACK_MS)
         val result = SessionPairer.pair(queryEvents(since, now))
 
@@ -75,6 +79,8 @@ class UsagePoller(context: Context) {
     }
 
     private companion object {
+        // The scheduled chain and the on-open poll must not read the same window at once (double inserts).
+        val pollLock = Mutex()
         const val DEFAULT_LOOKBACK_MS = 15 * 60 * 1000L
         const val MAX_OPEN_CARRY_MS = 6 * 60 * 60 * 1000L
     }

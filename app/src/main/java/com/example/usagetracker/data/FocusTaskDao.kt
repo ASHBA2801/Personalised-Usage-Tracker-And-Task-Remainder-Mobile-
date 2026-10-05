@@ -28,6 +28,13 @@ interface FocusTaskDao {
     @Query("SELECT * FROM focus_tasks WHERE date = :date ORDER BY createdAt, id")
     fun observeWithSubTasksForDate(date: String): Flow<List<TaskWithSubTasks>>
 
+    @Query("SELECT * FROM focus_tasks WHERE id = :id")
+    suspend fun getById(id: Long): FocusTask?
+
+    /** Task totals for one day in a single aggregate row; feeds the Home card without loading the tasks. */
+    @Query("SELECT COUNT(*) AS total, COALESCE(SUM(isCompleted), 0) AS done FROM focus_tasks WHERE date = :date")
+    fun observeDayCounts(date: String): Flow<DayCounts>
+
     /** Only the two columns the import duplicate check needs. */
     @Query("SELECT date, title FROM focus_tasks WHERE date IN (:dates)")
     suspend fun getDateTitlesForDates(dates: List<String>): List<DateTitle>
@@ -62,6 +69,15 @@ interface FocusTaskDao {
 
     @Insert
     suspend fun insertSubTasks(subTasks: List<SubTask>)
+
+    @Update
+    suspend fun updateSubTask(subTask: SubTask)
+
+    @Query("SELECT * FROM sub_tasks WHERE taskId = :taskId ORDER BY sortOrder, id")
+    suspend fun getSubTasks(taskId: Long): List<SubTask>
+
+    @Query("DELETE FROM sub_tasks WHERE id IN (:ids)")
+    suspend fun deleteSubTasksByIds(ids: List<Long>)
 
     /** Completing a task completes all its subtasks; reopening it leaves them as they are. */
     @Transaction
@@ -101,6 +117,44 @@ interface FocusTaskDao {
         if (subTasks.isNotEmpty()) insertSubTasks(subTasks.map { it.copy(id = 0, taskId = id) })
         return id
     }
+
+    /**
+     * Saves an edit and reconciles the sub-tasks in one transaction. [task] carries the edited fields; its
+     * completion state is taken from the stored row so a stale copy can't undo a tick made meanwhile.
+     * [subTasks] is the wanted list in display order: an entry with an id of an existing sub-task of this task
+     * is kept (completed state and deadline preserved, title and sortOrder updated), id 0 is inserted, and
+     * existing sub-tasks not listed are deleted. A completed task that gains an open sub-task is reopened,
+     * the same as unchecking a sub-task. Returns false if the task no longer exists.
+     */
+    @Transaction
+    suspend fun updateWithSubTasks(task: FocusTask, subTasks: List<SubTaskInput>): Boolean {
+        val stored = getById(task.id) ?: return false
+        val existing = getSubTasks(task.id).associateBy { it.id }
+        val keptIds = subTasks.mapNotNull { it.id.takeIf { id -> id in existing } }.toSet()
+        val removed = existing.keys - keptIds
+        if (removed.isNotEmpty()) deleteSubTasksByIds(removed.toList())
+
+        val inserts = ArrayList<SubTask>()
+        subTasks.forEachIndexed { index, input ->
+            val current = existing[input.id]
+            if (current == null) {
+                inserts += SubTask(taskId = task.id, title = input.title, sortOrder = index)
+            } else if (current.title != input.title || current.sortOrder != index) {
+                updateSubTask(current.copy(title = input.title, sortOrder = index))
+            }
+        }
+        if (inserts.isNotEmpty()) insertSubTasks(inserts)
+
+        val reopen = stored.isCompleted && inserts.isNotEmpty()
+        update(task.copy(isCompleted = stored.isCompleted && !reopen))
+        return true
+    }
 }
+
+/** A sub-task as edited in the task sheet: [id] is 0 for a new one. */
+data class SubTaskInput(val id: Long, val title: String)
+
+/** Aggregate row behind the daily progress cards. */
+data class DayCounts(val total: Int, val done: Int)
 
 data class DateTitle(val date: String, val title: String)

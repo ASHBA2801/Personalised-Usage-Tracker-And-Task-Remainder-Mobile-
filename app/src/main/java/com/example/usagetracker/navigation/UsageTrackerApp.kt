@@ -2,7 +2,13 @@ package com.example.usagetracker.navigation
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -21,6 +27,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.usagetracker.ui.screens.CategoriesScreen
+import com.example.usagetracker.ui.screens.DetectionStatusScreen
 import com.example.usagetracker.ui.screens.EndOfDayScreen
 import com.example.usagetracker.ui.screens.FocusTasksScreen
 import com.example.usagetracker.ui.screens.HomeScreen
@@ -35,6 +42,8 @@ private const val CATEGORIES_ROUTE = "categories"
 
 private const val PRIVACY_ROUTE = "privacy"
 
+private const val DETECTION_STATUS_ROUTE = "detection_status"
+
 /** Reached from Focus Tasks after picking a file. */
 private const val IMPORT_PREVIEW_ROUTE = "import_preview"
 
@@ -42,6 +51,17 @@ private const val TEMPLATES_ROUTE = "import_templates"
 
 /** Opened from the end-of-day notification, so it is not a bottom-bar tab. */
 private const val END_OF_DAY_ROUTE = "end_of_day"
+
+/** Back arrow above a screen reached from Settings or Focus Tasks (system back also works). */
+@Composable
+private fun SubScreen(onBack: () -> Unit, content: @Composable () -> Unit) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        IconButton(onClick = onBack) {
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+        }
+        Box(modifier = Modifier.weight(1f)) { content() }
+    }
+}
 
 @Composable
 fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit = {}) {
@@ -80,7 +100,12 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
                 Destination.entries.forEach { destination ->
                     NavigationBarItem(
                         selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true,
-                        onClick = { navigateToTab(destination) },
+                        onClick = {
+                            val selected = currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                            // Re-tapping the current tab returns to its root (e.g. Categories -> Settings).
+                            if (selected) navController.popBackStack(destination.route, inclusive = false)
+                            else navigateToTab(destination)
+                        },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
                         label = { Text(destination.label) },
                     )
@@ -93,7 +118,10 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
             startDestination = Destination.Home.route,
             modifier = Modifier.padding(innerPadding),
         ) {
-            composable(Destination.Home.route) { HomeScreen(onOpenSettings = { navigateToTab(Destination.Settings) }) }
+            composable(Destination.Home.route) { HomeScreen(
+                    onOpenSettings = { navigateToTab(Destination.Settings) },
+                    onOpenFocus = { navigateToTab(Destination.FocusTasks) },
+                ) }
             composable(Destination.FocusTasks.route) {
                 FocusTasksScreen(
                     onImport = { pickImportFile.launch(ImportViewModel.MIME_TYPES) },
@@ -107,6 +135,7 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
                 SettingsScreen(
                     onOpenCategories = { navController.navigate(CATEGORIES_ROUTE) },
                     onOpenPrivacy = { navController.navigate(PRIVACY_ROUTE) },
+                    onOpenDetectionStatus = { navController.navigate(DETECTION_STATUS_ROUTE) },
                 )
             }
             composable(IMPORT_PREVIEW_ROUTE) {
@@ -116,9 +145,10 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
                     onImported = { navController.popBackStack() },
                 )
             }
-            composable(TEMPLATES_ROUTE) { TemplatesScreen() }
-            composable(PRIVACY_ROUTE) { PrivacyScreen() }
-            composable(CATEGORIES_ROUTE) { CategoriesScreen() }
+            composable(TEMPLATES_ROUTE) { SubScreen(onBack = { navController.popBackStack() }) { TemplatesScreen() } }
+            composable(PRIVACY_ROUTE) { SubScreen(onBack = { navController.popBackStack() }) { PrivacyScreen() } }
+            composable(DETECTION_STATUS_ROUTE) { SubScreen(onBack = { navController.popBackStack() }) { DetectionStatusScreen() } }
+            composable(CATEGORIES_ROUTE) { SubScreen(onBack = { navController.popBackStack() }) { CategoriesScreen() } }
             composable(END_OF_DAY_ROUTE) { EndOfDayScreen(onDone = { navController.popBackStack() }) }
         }
     }

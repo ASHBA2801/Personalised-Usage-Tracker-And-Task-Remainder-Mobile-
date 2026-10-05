@@ -58,18 +58,30 @@ object ContentClassifier {
 
         // Layout fallback. Video page: a seek bar plus a full-width list in the lower part of the
         // screen (related videos / comments). Shorts: a full-bleed pager with very few children.
-        val hasSeek = s.hasSeekBarClass
-        if (hasSeek && s.scrollers.any { it.top > s.height * 0.25 && it.right - it.left >= s.width * 0.9 }) {
-            return Classification(ContentTag.VIDEO, "layout:seekbar+list-below")
-        }
-        val browsing = s.resourceIds.any { id -> BROWSE_TOKENS.any { it in id } }
-        if (!hasSeek && !browsing && s.scrollers.any {
-                it.top <= s.height * 0.05 && it.bottom - it.top >= s.height * 0.9 &&
-                    it.right - it.left >= s.width * 0.95 && it.childCount <= 3
-            }
-        ) {
-            return Classification(ContentTag.SHORTS, "layout:fullbleed-pager")
-        }
+        if (seekBarWithListBelow(s)) return Classification(ContentTag.VIDEO, "layout:seekbar+list-below")
+        if (fullBleedPager(s)) return Classification(ContentTag.SHORTS, "layout:fullbleed-pager")
         return Classification(ContentTag.OTHER, "default")
+    }
+
+    private fun seekBarWithListBelow(s: ScreenSnapshot) =
+        s.hasSeekBarClass && s.scrollers.any { it.top > s.height * 0.25 && it.right - it.left >= s.width * 0.9 }
+
+    private fun fullBleedPager(s: ScreenSnapshot): Boolean {
+        val browsing = s.resourceIds.any { id -> BROWSE_TOKENS.any { it in id } }
+        return !s.hasSeekBarClass && !browsing && s.scrollers.any {
+            it.top <= s.height * 0.05 && it.bottom - it.top >= s.height * 0.9 &&
+                it.right - it.left >= s.width * 0.95 && it.childCount <= 3
+        }
+    }
+
+    /** Every rule that matches [s], not just the first. Names only; used by diagnostics and the status screen. */
+    fun matchedSignals(s: ScreenSnapshot): List<String> {
+        val out = ArrayList<String>()
+        s.resourceIds.filter(::isShortsId).sorted().forEach { out += "shorts:id:$it" }
+        s.resourceIds.filter { id -> VIDEO_TOKENS.any { it in id } && CHROME_TOKENS.none { it in id } }
+            .sorted().forEach { out += "video:id:$it" }
+        if (seekBarWithListBelow(s)) out += "video:layout:seekbar+list-below"
+        if (fullBleedPager(s)) out += "shorts:layout:fullbleed-pager"
+        return out
     }
 }

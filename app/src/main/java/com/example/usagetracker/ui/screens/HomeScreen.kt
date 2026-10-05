@@ -39,9 +39,10 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.usagetracker.tracking.TrackerPrefs
+import com.example.usagetracker.tracking.TrackerScheduler
 
 @Composable
-fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = viewModel()) {
+fun HomeScreen(onOpenSettings: () -> Unit, onOpenFocus: () -> Unit, viewModel: HomeViewModel = viewModel()) {
     val context = LocalContext.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     var trackingEnabled by remember { mutableStateOf(TrackerPrefs(context).enabled) }
@@ -52,15 +53,20 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = viewModel(
         val prefs = TrackerPrefs(context)
         trackingEnabled = prefs.enabled
         everTracked = prefs.lastPolledTimestamp != null
+        TrackerScheduler.pollNow(context)
         viewModel.refresh()
     }
 
     val report = state.report
+    val todayProgress by viewModel.todayProgress.collectAsStateWithLifecycle()
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        todayProgress?.let { progress ->
+            item(key = "todays_focus") { TodaysFocusCard(progress, onOpenFocus) }
+        }
         item { PeriodToggle(state.period, viewModel::selectPeriod) }
 
         when {
@@ -78,6 +84,23 @@ fun HomeScreen(onOpenSettings: () -> Unit, viewModel: HomeViewModel = viewModel(
                 item { Text("By app", style = MaterialTheme.typography.titleMedium) }
                 items(report.apps, key = { it.packageName }) { AppRow(it, report.totalMs) }
             }
+        }
+    }
+}
+
+/** Today's task progress, or a small prompt when nothing is planned. Either way a tap opens Focus Tasks. */
+@Composable
+private fun TodaysFocusCard(progress: Progress, onOpenFocus: () -> Unit) {
+    if (progress.hasItems) {
+        DailyProgressCard(progress, heading = "Today's focus", allDoneMessage = "All done for today", onClick = onOpenFocus)
+    } else {
+        Card(onClick = onOpenFocus, modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Add today's tasks",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(16.dp),
+            )
         }
     }
 }
@@ -172,7 +195,7 @@ private fun EmptyState(period: Period, trackingEnabled: Boolean, everTracked: Bo
         )
         !everTracked -> Triple(
             "No usage tracked yet",
-            "Tracking is on. The first check runs within about 15 minutes.",
+            "Tracking is on. The first check runs within about 5 minutes.",
             false,
         )
         else -> Triple(

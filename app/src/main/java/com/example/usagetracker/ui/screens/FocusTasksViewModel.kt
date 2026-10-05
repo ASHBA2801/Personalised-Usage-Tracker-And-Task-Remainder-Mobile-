@@ -7,6 +7,7 @@ import androidx.room.withTransaction
 import com.example.usagetracker.data.AppDatabase
 import com.example.usagetracker.data.FocusTask
 import com.example.usagetracker.data.SubTask
+import com.example.usagetracker.data.SubTaskInput
 import com.example.usagetracker.data.TaskWithSubTasks
 import com.example.usagetracker.importer.ImportLimits
 import com.example.usagetracker.importer.Sanitizer
@@ -66,30 +67,45 @@ class FocusTasksViewModel(app: Application) : AndroidViewModel(app) {
         pickedDate.value = if (target == LocalDate.now()) null else target
     }
 
-    /** Adds to the day being viewed. */
-    fun addTask(title: String) {
-        val clean = cleanTitle(title) ?: return
-        val date = selectedDate.value.toString()
+    /** What the task sheet submits; [id] is null for a new task. Text is cleaned and blank sub-tasks dropped on save. */
+    data class TaskForm(
+        val id: Long?,
+        val title: String,
+        val date: LocalDate,
+        val deadline: Long?,
+        val priority: Int,
+        val estimatedMinutes: Int?,
+        val notes: String,
+        val subTasks: List<SubTaskInput>,
+    )
+
+    /** Creates the task, or edits [original] and reconciles its sub-tasks, in one transaction. */
+    fun saveTask(form: TaskForm, original: FocusTask?) {
+        val title = cleanTitle(form.title) ?: return
+        val subs = form.subTasks
+            .mapNotNull { sub -> cleanTitle(sub.title)?.let { SubTaskInput(sub.id, it) } }
+            .take(MAX_SUBTASKS_IN_UI)
+        val notes = Sanitizer.multiLine(form.notes).take(ImportLimits.MAX_NOTES).ifEmpty { null }
+        val base = original ?: FocusTask(title = title, date = form.date.toString(), createdAt = System.currentTimeMillis())
+        val task = base.copy(
+            title = title,
+            date = form.date.toString(),
+            deadline = form.deadline,
+            priority = form.priority,
+            estimatedMinutes = form.estimatedMinutes,
+            notes = notes,
+        )
         viewModelScope.launch {
-            dao.insert(
-                FocusTask(
-                    title = clean,
-                    date = date,
-                    isCompleted = false,
-                    carriedOverFromDate = null,
-                    createdAt = System.currentTimeMillis(),
-                ),
-            )
+            if (original == null) {
+                dao.insertWithSubTasks(task, subs.mapIndexed { i, s -> SubTask(taskId = 0, title = s.title, sortOrder = i) })
+            } else {
+                dao.updateWithSubTasks(task, subs)
+            }
         }
     }
 
     fun toggleComplete(task: FocusTask) {
         viewModelScope.launch { dao.setTaskCompleted(task.id, !task.isCompleted) }
-    }
-
-    fun updateTitle(task: FocusTask, newTitle: String) {
-        val clean = cleanTitle(newTitle) ?: return
-        viewModelScope.launch { dao.update(task.copy(title = clean)) }
     }
 
     fun deleteTask(taskId: Long) {
@@ -117,4 +133,8 @@ class FocusTasksViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun cleanTitle(text: String): String? =
         Sanitizer.singleLine(text).take(ImportLimits.MAX_TITLE).takeIf { it.isNotEmpty() }
+
+    companion object {
+        const val MAX_SUBTASKS_IN_UI = 50
+    }
 }

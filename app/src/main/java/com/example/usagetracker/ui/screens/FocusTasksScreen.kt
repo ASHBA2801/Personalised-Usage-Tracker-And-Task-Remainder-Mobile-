@@ -4,7 +4,17 @@ import android.Manifest
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.text.format.DateFormat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +40,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,11 +81,8 @@ import com.example.usagetracker.importer.ImportResult
 import com.example.usagetracker.notifications.Notifications
 import java.time.LocalDate
 
-/** Dialog target: a new task, or an existing one being edited. */
-private sealed interface Editing {
-    data object New : Editing
-    data class Existing(val task: FocusTask) : Editing
-}
+/** Sheet target saved across rotation: [NEW_TASK] for a new task, else the id of the task being edited. */
+private const val NEW_TASK = 0L
 
 /**
  * @param onImport opens the file picker flow.
@@ -94,7 +100,7 @@ fun FocusTasksScreen(
     val tasks by viewModel.tasks.collectAsStateWithLifecycle()
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val today by viewModel.todayDate.collectAsStateWithLifecycle()
-    var editing by remember { mutableStateOf<Editing?>(null) }
+    var editing by rememberSaveable { mutableStateOf<Long?>(null) }
     var expanded by rememberSaveable { mutableStateOf(setOf<Long>()) }
     var menuOpen by remember { mutableStateOf(false) }
     val snackbar = remember { SnackbarHostState() }
@@ -154,6 +160,13 @@ fun FocusTasksScreen(
                 onToday = viewModel::showToday,
             )
             val list = tasks
+            val progress = remember(list) { dayProgress(list.orEmpty()) }
+            DailyProgressCard(
+                progress = progress,
+                heading = null,
+                allDoneMessage = if (selectedDate == today) "All done for today" else "All done for this day",
+                modifier = Modifier.padding(top = 4.dp),
+            )
             when {
                 list == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -177,7 +190,7 @@ fun FocusTasksScreen(
                             "Tap + to add your first task",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.clickable { editing = Editing.New }.padding(8.dp),
+                            modifier = Modifier.clickable { editing = NEW_TASK }.padding(8.dp),
                         )
                     }
                 }
@@ -193,7 +206,7 @@ fun FocusTasksScreen(
                             expanded = id in expanded,
                             onExpandToggle = { expanded = if (id in expanded) expanded - id else expanded + id },
                             onToggle = { viewModel.toggleComplete(item.task) },
-                            onEdit = { editing = Editing.Existing(item.task) },
+                            onEdit = { editing = id },
                             onDelete = { viewModel.deleteTask(id) },
                             onToggleSubTask = viewModel::toggleSubTask,
                             onAddSubTask = { viewModel.addSubTask(item.task, it) },
@@ -204,26 +217,25 @@ fun FocusTasksScreen(
             }
         }
         FloatingActionButton(
-            onClick = { editing = Editing.New },
+            onClick = { editing = NEW_TASK },
             modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
         ) { Icon(Icons.Default.Add, contentDescription = "Add task") }
         SnackbarHost(snackbar, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 80.dp))
     }
 
-    when (val target = editing) {
-        null -> Unit
-        else -> TaskDialog(
-            initial = (target as? Editing.Existing)?.task?.title.orEmpty(),
-            isNew = target is Editing.New,
-            onDismiss = { editing = null },
-            onConfirm = { title ->
-                when (target) {
-                    Editing.New -> viewModel.addTask(title)
-                    is Editing.Existing -> viewModel.updateTitle(target.task, title)
-                }
-                editing = null
-            },
-        )
+    val target = editing
+    if (target != null && tasks != null) {
+        val existing = if (target == NEW_TASK) null else tasks?.firstOrNull { it.task.id == target }
+        if (target == NEW_TASK || existing != null) {
+            TaskSheet(
+                original = existing,
+                defaultDate = selectedDate,
+                onDismiss = { editing = null },
+                onSave = { form -> viewModel.saveTask(form, existing?.task) },
+            )
+        } else {
+            LaunchedEffect(target) { editing = null } // the task was deleted while open
+        }
     }
 }
 
@@ -265,60 +277,88 @@ private fun TaskRow(
     val task = item.task
     val subTasks = item.orderedSubTasks
     Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.clickable(onClick = onExpandToggle).padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = task.isCompleted, onCheckedChange = { onToggle() })
-            Column(modifier = Modifier.weight(1f).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    task.title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    textDecoration = if (task.isCompleted) TextDecoration.LineThrough else null,
-                    modifier = Modifier.alpha(if (task.isCompleted) 0.6f else 1f),
-                )
-                TaskMeta(task, subTasks)
-                if (task.carriedOverFromDate != null) {
-                    Text(
-                        "Carried over from ${task.carriedOverFromDate}",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.tertiary,
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(Modifier.width(4.dp).fillMaxHeight().background(priorityAccent(task.priority)))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                    modifier = Modifier.clickable(onClick = onExpandToggle).padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = task.isCompleted, onCheckedChange = { onToggle() })
+                    Column(modifier = Modifier.weight(1f).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            task.title,
+                            style = MaterialTheme.typography.bodyLarge,
+                            textDecoration = if (task.isCompleted) TextDecoration.LineThrough else null,
+                            modifier = Modifier.alpha(if (task.isCompleted) 0.6f else 1f),
+                        )
+                        TaskMeta(task)
+                        SubTaskProgressBar(subTasks)
+                        if (task.carriedOverFromDate != null) {
+                            Text(
+                                "Carried over from ${task.carriedOverFromDate}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
+                    }
+                    Icon(
+                        if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Edit task") }
+                    IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete task") }
+                }
+                if (expanded) {
+                    HorizontalDivider()
+                    TaskDetails(task, subTasks, onToggleSubTask, onAddSubTask, onDeleteSubTask)
                 }
             }
-            Icon(
-                if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete task") }
-        }
-        if (expanded) {
-            HorizontalDivider()
-            TaskDetails(task, subTasks, onEdit, onToggleSubTask, onAddSubTask, onDeleteSubTask)
         }
     }
 }
 
-/** Priority, deadline and "done/total" on one wrapping line; nothing when the task has none. */
+/** Left-edge priority color; theme colors only. None stays invisible against the card. */
 @Composable
-private fun TaskMeta(task: FocusTask, subTasks: List<SubTask>) {
-    val hasDeadline = task.deadline != null
-    if (task.priority == FocusTask.PRIORITY_NONE && !hasDeadline && subTasks.isEmpty()) return
+private fun priorityAccent(priority: Int): Color = when (priority) {
+    FocusTask.PRIORITY_HIGH -> MaterialTheme.colorScheme.error
+    FocusTask.PRIORITY_MEDIUM -> MaterialTheme.colorScheme.tertiary
+    FocusTask.PRIORITY_LOW -> MaterialTheme.colorScheme.secondary
+    else -> Color.Transparent
+}
+
+/** Priority and deadline on one wrapping line; nothing when the task has neither. */
+@Composable
+private fun TaskMeta(task: FocusTask) {
+    val deadline = task.deadline
+    if (task.priority == FocusTask.PRIORITY_NONE && deadline == null) return
+    val is24Hour = DateFormat.is24HourFormat(LocalContext.current)
     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         PriorityPill(task.priority)
-        task.deadline?.let { deadline ->
-            val overdue = !task.isCompleted && deadline < System.currentTimeMillis()
-            DeadlinePill(TaskFormatting.deadline(deadline, LocalDate.parse(task.date)), overdue)
+        if (deadline != null) {
+            val now = System.currentTimeMillis()
+            DeadlinePill(TaskFormatting.deadlineLabel(deadline, now, is24Hour), overdue = !task.isCompleted && deadline < now)
         }
-        if (subTasks.isNotEmpty()) {
-            Text(
-                "${subTasks.count { it.isCompleted }}/${subTasks.size}",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.align(Alignment.CenterVertically),
-            )
-        }
+    }
+}
+
+/** Thin bar plus "2/5"; absent when the task has no sub-tasks. */
+@Composable
+private fun SubTaskProgressBar(subTasks: List<SubTask>) {
+    if (subTasks.isEmpty()) return
+    val progress = remember(subTasks) { subTaskProgress(subTasks) }
+    val animated by animateFloatAsState(progress.fraction, label = "subtask progress")
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LinearProgressIndicator(
+            progress = { animated },
+            modifier = Modifier.weight(1f).height(4.dp).testTag("subtask_progress"),
+        )
+        Text(
+            "${progress.done}/${progress.total}",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -326,7 +366,6 @@ private fun TaskMeta(task: FocusTask, subTasks: List<SubTask>) {
 private fun TaskDetails(
     task: FocusTask,
     subTasks: List<SubTask>,
-    onEdit: () -> Unit,
     onToggleSubTask: (SubTask) -> Unit,
     onAddSubTask: (String) -> Unit,
     onDeleteSubTask: (SubTask) -> Unit,
@@ -368,10 +407,6 @@ private fun TaskDetails(
                 }
             }
         }
-        TextButton(onClick = onEdit) {
-            Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text("Edit title", modifier = Modifier.padding(start = 8.dp))
-        }
     }
 }
 
@@ -394,27 +429,4 @@ private fun AddSubTaskField(onAdd: (String) -> Unit) {
         )
         IconButton(onClick = submit, enabled = text.isNotBlank()) { Icon(Icons.Default.Add, contentDescription = "Add subtask") }
     }
-}
-
-@Composable
-private fun TaskDialog(initial: String, isNew: Boolean, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var text by rememberSaveable { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(if (isNew) "Add task" else "Edit task") },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                singleLine = true,
-                label = { Text("Title") },
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) {
-                Text(if (isNew) "Add" else "Save")
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }
