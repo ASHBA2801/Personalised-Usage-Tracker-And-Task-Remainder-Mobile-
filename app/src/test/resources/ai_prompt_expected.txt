@@ -1,0 +1,30 @@
+Convert my plan below into ONE JSON file for my task app. Output only the JSON inside a single code block, with no commentary.
+
+Format:
+{
+  "schema_version": 1,
+  "tasks": [
+    {
+      "title": "required, short, max 200 characters",
+      "date": "YYYY-MM-DD, the day I should do it",
+      "deadline": "YYYY-MM-DD or YYYY-MM-DD HH:mm (24-hour)",
+      "priority": "high | medium | low",
+      "estimated_minutes": 45,
+      "tags": ["short", "labels"],
+      "notes": "optional extra details",
+      "subtasks": [
+        { "title": "required", "completed": false, "deadline": "optional" }
+      ]
+    }
+  ]
+}
+
+Rules:
+- Only "title" is required. Leave out any field you are not sure about instead of guessing.
+- Today's date is {TODAY}. Never use dates before today.
+- Subtasks are one level only (no subtasks inside subtasks).
+- Spread tasks sensibly across days. Do not put more than about 6 tasks on one day.
+- Use plain text only. No markdown inside values.
+
+My plan:
+[PASTE YOUR PLAN HERE]

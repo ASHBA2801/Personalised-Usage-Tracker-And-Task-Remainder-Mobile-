@@ -28,6 +28,7 @@ import com.example.usagetracker.ui.screens.ImportPreviewScreen
 import com.example.usagetracker.ui.screens.ImportViewModel
 import com.example.usagetracker.ui.screens.PrivacyScreen
 import com.example.usagetracker.ui.screens.SettingsScreen
+import com.example.usagetracker.ui.screens.TemplatesScreen
 
 /** Reached from Settings, so it is not a bottom-bar tab. */
 private const val CATEGORIES_ROUTE = "categories"
@@ -36,6 +37,8 @@ private const val PRIVACY_ROUTE = "privacy"
 
 /** Reached from Focus Tasks after picking a file. */
 private const val IMPORT_PREVIEW_ROUTE = "import_preview"
+
+private const val TEMPLATES_ROUTE = "import_templates"
 
 /** Opened from the end-of-day notification, so it is not a bottom-bar tab. */
 private const val END_OF_DAY_ROUTE = "end_of_day"
@@ -94,7 +97,7 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
             composable(Destination.FocusTasks.route) {
                 FocusTasksScreen(
                     onImport = { pickImportFile.launch(ImportViewModel.MIME_TYPES) },
-                    onOpenTemplates = {},
+                    onOpenTemplates = { navController.navigate(TEMPLATES_ROUTE) },
                     importResult = importResult,
                     onImportResultShown = importViewModel::consumeFinished,
                     onUndoImport = importViewModel::undo,
@@ -113,6 +116,7 @@ fun UsageTrackerApp(showEndOfDay: Boolean = false, onEndOfDayHandled: () -> Unit
                     onImported = { navController.popBackStack() },
                 )
             }
+            composable(TEMPLATES_ROUTE) { TemplatesScreen() }
             composable(PRIVACY_ROUTE) { PrivacyScreen() }
             composable(CATEGORIES_ROUTE) { CategoriesScreen() }
             composable(END_OF_DAY_ROUTE) { EndOfDayScreen(onDone = { navController.popBackStack() }) }
