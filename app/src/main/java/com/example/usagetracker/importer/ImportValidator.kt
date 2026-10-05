@@ -23,7 +23,7 @@ class ImportValidator(
         if (raw.size > MAX_TASKS) {
             issues += warning(
                 raw[MAX_TASKS].location,
-                "Only $MAX_TASKS tasks can be imported at once; the remaining ${raw.size - MAX_TASKS} were ignored.",
+                "Only $MAX_TASKS tasks can be imported at once; the rest were ignored.",
             )
         }
         val tasks = raw.take(MAX_TASKS).mapNotNull { validateTask(it, issues) }
