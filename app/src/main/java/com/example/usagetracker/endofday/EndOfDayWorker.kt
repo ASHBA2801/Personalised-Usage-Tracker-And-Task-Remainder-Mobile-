@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.usagetracker.data.AppDatabase
-import com.example.usagetracker.data.FocusTask
 import com.example.usagetracker.notifications.Notifications
 import java.time.LocalDate
 
@@ -22,15 +21,7 @@ class EndOfDayWorker(context: Context, params: WorkerParameters) : CoroutineWork
             // Copy, never move: the original stays incomplete on today's date so history is accurate.
             incompleteTasks.forEach { task ->
                 if (dao.countCarriedOver(tomorrow, task.title, today) == 0) {
-                    dao.insert(
-                        FocusTask(
-                            title = task.title,
-                            date = tomorrow,
-                            isCompleted = false,
-                            carriedOverFromDate = today,
-                            createdAt = System.currentTimeMillis(),
-                        ),
-                    )
+                    dao.carryOver(task, tomorrow, System.currentTimeMillis())
                 }
             }
             Notifications.showEndOfDay(applicationContext, incompleteTasks.map { it.title })

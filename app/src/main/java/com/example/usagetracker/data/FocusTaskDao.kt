@@ -77,6 +77,23 @@ interface FocusTaskDao {
         if (!completed) setCompletedFlag(subTask.taskId, false)
     }
 
+    /**
+     * Copies [task] onto [toDate] as a fresh incomplete task, keeping its details and only its incomplete
+     * subtasks (order and deadlines kept). The copy is not part of any import batch.
+     */
+    @Transaction
+    suspend fun carryOver(task: FocusTask, toDate: String, now: Long): Long {
+        val copy = task.copy(
+            id = 0,
+            date = toDate,
+            isCompleted = false,
+            carriedOverFromDate = task.date,
+            createdAt = now,
+            importBatchId = null,
+        )
+        return insertWithSubTasks(copy, getIncompleteSubTasks(task.id))
+    }
+
     /** Inserts [task] and its [subTasks] (their taskId is filled in) atomically; returns the new task id. */
     @Transaction
     suspend fun insertWithSubTasks(task: FocusTask, subTasks: List<SubTask>): Long {

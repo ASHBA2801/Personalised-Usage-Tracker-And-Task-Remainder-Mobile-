@@ -29,7 +29,11 @@ fun PrivacyScreen() {
             "What is not collected",
             "No screen content beyond that YouTube check, no personal files, no keystrokes, no messages.",
         )
-        Section("Where it is stored", "Only on this device, in a local database. It is excluded from Android backups.")
+        Section(
+            "Where it is stored",
+            "Only on this device, in a local database. It is excluded from Android backups. " +
+                "Imported files are read once on this device and are not stored; only the tasks parsed from them are saved locally.",
+        )
         Section(
             "What leaves the device",
             "Nothing. The app has no internet permission at all, so it cannot send data anywhere.",
