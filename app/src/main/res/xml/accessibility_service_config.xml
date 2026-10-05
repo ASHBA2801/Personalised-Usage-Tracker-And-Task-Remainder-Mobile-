@@ -2,7 +2,8 @@
 <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
     android:accessibilityFeedbackType="feedbackGeneric"
+    android:packageNames="com.google.android.youtube"
     android:canRetrieveWindowContent="true"
     android:description="@string/content_detection_service_description"
     android:accessibilityFlags="flagReportViewIds|flagIncludeNotImportantViews"
-    android:notificationTimeout="100" />
+    android:notificationTimeout="500" />

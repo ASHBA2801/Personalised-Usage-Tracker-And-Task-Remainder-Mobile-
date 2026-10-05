@@ -9,3 +9,8 @@
 .externalNativeBuild/
 .cxx/
 *.apk
+
+# Release signing
+keystore.properties
+*.jks
+*.keystore

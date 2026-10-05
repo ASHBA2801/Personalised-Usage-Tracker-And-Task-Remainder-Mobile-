@@ -23,8 +23,11 @@ object EndOfDayScheduler {
         return Duration.between(now, target).toMillis()
     }
 
+    // Doze note: when the phone is idle Android may delay this notification by a few minutes. That is
+    // fine here; exact alarms or a foreground service would cost far more battery, so we don't use them.
     /** Queues the next check, replacing any pending one. Call on app start, after a time change, and from the worker. */
     fun schedule(context: Context) {
+        // No constraints on purpose: the end-of-day notice should still arrive when the battery is low.
         val request = OneTimeWorkRequestBuilder<EndOfDayWorker>()
             .setInitialDelay(calculateDelayUntilEndOfDay(context), TimeUnit.MILLISECONDS)
             .build()

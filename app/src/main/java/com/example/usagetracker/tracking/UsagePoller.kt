@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import com.example.usagetracker.data.AppDatabase
 import com.example.usagetracker.data.CategoryRepository
+import com.example.usagetracker.data.MIN_SESSION_MILLIS
 import com.example.usagetracker.data.UsageSession
 
 class UsagePoller(context: Context) {
@@ -21,33 +22,33 @@ class UsagePoller(context: Context) {
 
         val resolver = categories.resolver()
         val appNames = HashMap<String, String>()
-        var inserted = 0
+        val toInsert = ArrayList<UsageSession>()
         for (s in result.sessions) {
+            if (s.endTime - s.startTime < MIN_SESSION_MILLIS) continue
             // The cursor may re-read a window (see below), so skip sessions already stored.
             if (dao.countByPackageAndStart(s.packageName, s.startTime) > 0) continue
             // The accessibility service writes finer-grained, content-tagged rows for this window;
             // inserting the coarse one too would double count the time.
             if (dao.countOverlapping(s.packageName, s.startTime, s.endTime) > 0) continue
             val appName = appNames.getOrPut(s.packageName) { resolveAppName(s.packageName) }
-            dao.insert(
-                UsageSession(
+            toInsert += UsageSession(
                     packageName = s.packageName,
                     appName = appName,
                     category = resolver.resolve(s.packageName, null),
                     contentTag = null,
                     startTime = s.startTime,
                     endTime = s.endTime,
-                ),
-            )
-            inserted++
+                )
         }
+        // One write for the whole batch. The cursor below only moves once it has succeeded.
+        if (toInsert.isNotEmpty()) dao.insertAll(toInsert)
 
         // An app still in the foreground has no end time yet. Rewind the cursor to its start so the
         // next poll sees the whole session; otherwise it would be lost. Give up on sessions that
         // have been "open" implausibly long (missed background event, reboot) so we don't re-read forever.
         val openSince = result.openSince?.takeIf { now - it < MAX_OPEN_CARRY_MS }
         prefs.lastPolledTimestamp = openSince ?: now
-        return inserted
+        return toInsert.size
     }
 
     private fun queryEvents(from: Long, to: Long): List<RawEvent> {

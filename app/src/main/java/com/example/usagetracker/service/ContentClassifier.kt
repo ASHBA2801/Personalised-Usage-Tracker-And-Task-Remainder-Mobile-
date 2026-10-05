@@ -43,10 +43,12 @@ object ContentClassifier {
     // these (a feed also has a full-screen scroller), so it is skipped when any is visible.
     private val BROWSE_TOKENS = listOf("browse_fragment", "youtube_logo", "filter_bar", "results", "search_box")
 
+    /** True for an id that alone decides "shorts"; lets the tree walk stop as soon as one is seen. */
+    fun isShortsId(id: String): Boolean =
+        SHORTS_TOKENS.any { it in id } && CHROME_TOKENS.none { it in id }
+
     fun classify(s: ScreenSnapshot): Classification {
-        val shorts = s.resourceIds.filter { id ->
-            SHORTS_TOKENS.any { it in id } && CHROME_TOKENS.none { it in id }
-        }
+        val shorts = s.resourceIds.filter(::isShortsId)
         if (shorts.isNotEmpty()) return Classification(ContentTag.SHORTS, "id:" + shorts.sorted().first())
 
         val video = s.resourceIds.filter { id ->

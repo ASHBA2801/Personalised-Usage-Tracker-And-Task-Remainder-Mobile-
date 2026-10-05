@@ -4,7 +4,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "usage_sessions", indices = [Index("startTime")])
+@Entity(tableName = "usage_sessions", indices = [Index("startTime"), Index("endTime"), Index("packageName")])
 data class UsageSession(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val packageName: String,

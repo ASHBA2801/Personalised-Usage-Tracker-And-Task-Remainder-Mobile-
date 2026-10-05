@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
 enum class Period(val label: String) { TODAY("Today"), WEEK("Week") }
@@ -29,7 +28,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<HomeState> = combine(period, refresh) { p, _ -> p }
         .flatMapLatest { p ->
             val (start, end) = windowFor(p)
-            dao.getSessionsBetween(start, end).map { HomeState(p, UsageAggregator.aggregate(it, start, end)) }
+            combine(
+                dao.observeAppTotals(start, end),
+                dao.observeCategoryTotals(start, end),
+                dao.observeYouTubeContentTotals(start, end),
+            ) { apps, cats, tags -> HomeState(p, UsageAggregator.build(apps, cats, tags)) }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeState(period.value, null))
 

@@ -1,50 +1,48 @@
 package com.example.usagetracker.ui.screens
 
-import com.example.usagetracker.data.UsageSession
+import com.example.usagetracker.data.AppTotal
+import com.example.usagetracker.data.CategoryTotal
+import com.example.usagetracker.data.ContentTotal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class UsageAggregatorTest {
     private val yt = UsageReport.YOUTUBE
-    private fun s(pkg: String, start: Long, end: Long, tag: String? = null, cat: String = "UNCATEGORIZED") =
-        UsageSession(packageName = pkg, appName = pkg.uppercase(), category = cat, contentTag = tag, startTime = start, endTime = end)
+    private fun app(pkg: String, ms: Long) = AppTotal(pkg, pkg.uppercase(), ms)
 
-    @Test fun groupsByPackageAndSortsDescending() {
-        val r = UsageAggregator.aggregate(listOf(s("a", 0, 1000), s("b", 1000, 5000), s("a", 5000, 6000)), 0, 10_000)
+    @Test fun keepsDaoOrderOfApps() {
+        val r = UsageAggregator.build(listOf(app("b", 4000), app("a", 2000)), listOf(CategoryTotal("UNCATEGORIZED", 6000)), emptyList())
         assertEquals(listOf("b", "a"), r.apps.map { it.packageName })
-        assertEquals(listOf(4000L, 2000L), r.apps.map { it.totalMs })
         assertEquals(6000L, r.totalMs)
         assertEquals(6000L, r.uncategorizedMs)
     }
 
-    @Test fun clipsSessionsToWindow() {
-        val r = UsageAggregator.aggregate(listOf(s("a", -2000, 1000), s("a", 9000, 12_000)), 0, 10_000)
-        assertEquals(2000L, r.totalMs)
-    }
-
-    @Test fun ignoresZeroLengthAndOutOfWindowRows() {
-        val r = UsageAggregator.aggregate(listOf(s("a", 500, 500), s("b", 20_000, 30_000)), 0, 10_000)
-        assertEquals(true, r.isEmpty)
+    @Test fun emptyInputIsEmptyReport() {
+        assertEquals(true, UsageAggregator.build(emptyList(), emptyList(), emptyList()).isEmpty)
     }
 
     @Test fun splitsYouTubeByTagWithUntaggedAsOther() {
-        val r = UsageAggregator.aggregate(
-            listOf(s(yt, 0, 3000, "shorts"), s(yt, 3000, 4000, "video"), s(yt, 4000, 4500, "other"), s(yt, 4500, 5000)),
-            0, 10_000,
+        val r = UsageAggregator.build(
+            listOf(app(yt, 5000)),
+            listOf(CategoryTotal("LOW_VALUE", 5000)),
+            listOf(ContentTotal("shorts", 3000), ContentTotal("video", 1000), ContentTotal("other", 500), ContentTotal(null, 500)),
         )
         assertEquals(YouTubeSplit(3000, 1000, 1000), r.apps.single().youTube)
     }
 
     @Test fun nonYouTubeHasNoSplit() {
-        assertNull(UsageAggregator.aggregate(listOf(s("a", 0, 1000)), 0, 10_000).apps.single().youTube)
+        assertNull(UsageAggregator.build(listOf(app("a", 1000)), emptyList(), emptyList()).apps.single().youTube)
     }
 
-    @Test fun bucketsByCategory() {
-        val r = UsageAggregator.aggregate(
-            listOf(s("a", 0, 1000, cat = "USEFUL"), s("b", 0, 2000, cat = "LOW_VALUE"), s("c", 0, 4000)), 0, 10_000,
+    @Test fun bucketsByCategoryWithUnknownAsUncategorized() {
+        val r = UsageAggregator.build(
+            emptyList(),
+            listOf(CategoryTotal("USEFUL", 1000), CategoryTotal("LOW_VALUE", 2000), CategoryTotal("UNCATEGORIZED", 3000), CategoryTotal("WEIRD", 1000)),
+            emptyList(),
         )
         assertEquals(listOf(1000L, 2000L, 4000L), listOf(r.usefulMs, r.lowValueMs, r.uncategorizedMs))
+        assertEquals(7000L, r.totalMs)
     }
 
     @Test fun formatsDurations() {

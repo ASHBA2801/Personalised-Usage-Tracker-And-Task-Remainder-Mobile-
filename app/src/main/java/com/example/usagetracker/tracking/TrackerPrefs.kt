@@ -2,6 +2,7 @@ package com.example.usagetracker.tracking
 
 import android.content.Context
 import androidx.core.content.edit
+import com.example.usagetracker.service.ContentDetectionService
 
 /** Tiny SharedPreferences wrapper: the master switch, the poll cursor and the seeded flag. */
 class TrackerPrefs(context: Context) {
@@ -9,7 +10,10 @@ class TrackerPrefs(context: Context) {
 
     var enabled: Boolean
         get() = prefs.getBoolean(KEY_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(KEY_ENABLED, value) }
+        set(value) {
+            prefs.edit { putBoolean(KEY_ENABLED, value) }
+            ContentDetectionService.trackingEnabled = value
+        }
 
     /** Start of the window the next poll should read; null if the tracker has never run. */
     var lastPolledTimestamp: Long?

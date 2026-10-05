@@ -1,6 +1,8 @@
 package com.example.usagetracker.ui.screens
 
-import com.example.usagetracker.data.UsageSession
+import com.example.usagetracker.data.AppTotal
+import com.example.usagetracker.data.CategoryTotal
+import com.example.usagetracker.data.ContentTotal
 import com.example.usagetracker.service.ContentTag
 
 data class YouTubeSplit(val shortsMs: Long, val videoMs: Long, val otherMs: Long)
@@ -28,44 +30,24 @@ data class UsageReport(
     }
 }
 
-/** Pure aggregation, kept out of the ViewModel so it can be unit tested. */
+/** Turns the DAO's small per-app / per-category / per-tag totals into the screen's [UsageReport]. */
 object UsageAggregator {
-    /** Sums [sessions] clipped to [windowStart, windowEnd), grouped by package (and tag for YouTube). */
-    fun aggregate(sessions: List<UsageSession>, windowStart: Long, windowEnd: Long): UsageReport {
-        val byPackage = HashMap<String, MutableList<Pair<UsageSession, Long>>>()
-        var useful = 0L
-        var lowValue = 0L
-        var uncategorized = 0L
+    fun build(apps: List<AppTotal>, categories: List<CategoryTotal>, youTubeTags: List<ContentTotal>): UsageReport {
+        val useful = categories.filter { it.category == "USEFUL" }.sumOf { it.totalMillis }
+        val lowValue = categories.filter { it.category == "LOW_VALUE" }.sumOf { it.totalMillis }
+        val total = categories.sumOf { it.totalMillis }
 
-        for (s in sessions) {
-            val ms = minOf(s.endTime, windowEnd) - maxOf(s.startTime, windowStart)
-            if (ms <= 0) continue
-            byPackage.getOrPut(s.packageName) { ArrayList() } += s to ms
-            when (s.category) {
-                "USEFUL" -> useful += ms
-                "LOW_VALUE" -> lowValue += ms
-                else -> uncategorized += ms
-            }
-        }
-
-        val apps = byPackage.map { (pkg, rows) ->
-            val youTube = if (pkg == UsageReport.YOUTUBE) {
-                fun tagMs(tag: ContentTag) = rows.filter { it.first.contentTag == tag.value }.sumOf { it.second }
+        val usage = apps.filter { it.totalMillis > 0 }.map { a ->
+            val youTube = if (a.packageName == UsageReport.YOUTUBE) {
+                fun tagMs(tag: ContentTag) = youTubeTags.filter { it.contentTag == tag.value }.sumOf { it.totalMillis }
                 val shorts = tagMs(ContentTag.SHORTS)
                 val video = tagMs(ContentTag.VIDEO)
-                val total = rows.sumOf { it.second }
                 // Untagged rows (coarse poller sessions) fall into Other so the three sum to the total.
-                YouTubeSplit(shorts, video, total - shorts - video)
+                YouTubeSplit(shorts, video, a.totalMillis - shorts - video)
             } else null
-            AppUsage(
-                packageName = pkg,
-                // Rows are start-ordered, so the last name is the most recent label.
-                appName = rows.last().first.appName,
-                totalMs = rows.sumOf { it.second },
-                youTube = youTube,
-            )
+            AppUsage(a.packageName, a.appName, a.totalMillis, youTube)
         }.sortedByDescending { it.totalMs }
 
-        return UsageReport(useful + lowValue + uncategorized, useful, lowValue, uncategorized, apps)
+        return UsageReport(total, useful, lowValue, total - useful - lowValue, usage)
     }
 }
